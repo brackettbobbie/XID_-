@@ -1,0 +1,134 @@
+import os
+import sys
+import argparse
+import numpy as np
+import astropy.io.fits as pyfits
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+
+def crop_center(data, new_shape):
+    """Crop the center of the data array to new_shape."""
+    start_x = data.shape[1] // 2 - new_shape[1] // 2
+    start_y = data.shape[0] // 2 - new_shape[0] // 2
+    return data[start_y:start_y + new_shape[0], start_x:start_x + new_shape[1]]
+
+def stack_fits(files):
+    # Initialize variables for stacking
+    stacked_data = None
+    count = 0
+
+    # Determine the smallest shape
+    min_shape = None
+    for file in files:
+        with pyfits.open(file) as hdulist:
+            data = hdulist[0].data
+            if data is None:
+                print(f"Warning: {file} contains no data.")
+                continue
+            if min_shape is None:
+                min_shape = data.shape
+            else:
+                min_shape = (min(min_shape[0], data.shape[0]), min(min_shape[1], data.shape[1]))
+
+    if min_shape is None:
+        raise ValueError("No valid data found in any of the FITS files.")
+
+    # Loop through all FITS files
+    for file in files:
+        with pyfits.open(file) as hdulist:
+            data = hdulist[0].data
+            if data is None:
+                print(f"Warning: {file} contains no data.")
+                continue
+            cropped_data = crop_center(data, min_shape)
+
+            # Initialize the stacked_data array with the same shape as the first image
+            if stacked_data is None:
+                stacked_data = np.zeros_like(cropped_data, dtype=np.float64)
+
+            # Accumulate the data
+            stacked_data += cropped_data
+            count += 1
+
+    if count == 0:
+        raise ValueError("No valid data to stack after processing all FITS files.")
+
+    # Average the stacked data
+    stacked_data /= count
+
+    return stacked_data
+
+def normalize_data(data, method='linear'):
+    if method == 'linear':
+        # Normalize the data to range [0, 1]
+        norm_data = (data - np.min(data)) / (np.max(data) - np.min(data))
+    elif method == 'log':
+        # Apply logarithmic scaling
+        data = np.log10(data - np.min(data) + 1)
+        norm_data = (data - np.min(data)) / (np.max(data) - np.min(data))
+    else:
+        raise ValueError("Unknown normalization method: {}".format(method))
+    
+    return norm_data
+
+def display_image(data, title):
+    plt.imshow(data, cmap='gray', origin='lower')
+    plt.colorbar()
+    plt.title(title)
+    plt.show()
+
+def main():
+    parser = argparse.ArgumentParser(description='Stack and display FITS images')
+    parser.add_argument('fits_files', nargs='+', help='List of FITS files to stack')
+    args = parser.parse_args()
+
+    if len(args.fits_files) == 0:
+        sys.exit("Usage: python script.py <list_of_fits_files>")
+    
+    fits_files = args.fits_files
+
+    # Ensure the additional file is in the home directory
+    home_directory = os.path.expanduser("~")
+    additional_file = os.path.join(home_directory, 'joined_full_w_first_detected_centroid 1.fits')
+    if os.path.exists(additional_file):
+        fits_files.append(additional_file)
+    else:
+        print(f"Warning: {additional_file} not found. Proceeding with other files.")
+
+    # Stack the FITS files
+    stacked_data = stack_fits(fits_files)
+
+    # Check for NaNs and infinities
+    stacked_data = np.nan_to_num(stacked_data, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # Print statistics of the stacked data
+    print("Stacked data statistics:")
+    print(f"Min: {np.min(stacked_data)}")
+    print(f"Max: {np.max(stacked_data)}")
+    print(f"Mean: {np.mean(stacked_data)}")
+    print(f"Std Dev: {np.std(stacked_data)}")
+
+    # Normalize the stacked image data for better visualization
+    normalized_data_linear = normalize_data(stacked_data, method='linear')
+    normalized_data_log = normalize_data(stacked_data, method='log')
+
+    # Print statistics of the normalized data
+    print("Normalized data (linear) statistics:")
+    print(f"Min: {np.min(normalized_data_linear)}")
+    print(f"Max: {np.max(normalized_data_linear)}")
+    print(f"Mean: {np.mean(normalized_data_linear)}")
+    print(f"Std Dev: {np.std(normalized_data_linear)}")
+
+    print("Normalized data (log) statistics:")
+    print(f"Min: {np.min(normalized_data_log)}")
+    print(f"Max: {np.max(normalized_data_log)}")
+    print(f"Mean: {np.mean(normalized_data_log)}")
+    print(f"Std Dev: {np.std(normalized_data_log)}")
+
+    # Display the normalized images
+    display_image(normalized_data_linear, 'Stacked Image (Linear Normalization)')
+    display_image(normalized_data_log, 'Stacked Image (Log Normalization)')
+
+if __name__ == '__main__':
+    main()
