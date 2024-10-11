@@ -1,0 +1,968 @@
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+import matplotlib.pyplot as plt
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Print column names to see what's in the catalog
+print("Catalog columns:", catalog.colnames)
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+from astropy.wcs import WCS
+import matplotlib.pyplot as plt
+import astropy.units as u
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the correct bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1A_1 map and the correct bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1A_1_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1A_1_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+plt.savefig('stacked_cutout_1A_1_z0.5-0.75_M10-11.png', dpi=300)
+
+import numpy as np
+from astropy.table import Table
+from astropy.io import fits
+from astropy.wcs import WCS
+from astropy.coordinates import SkyCoord
+import astropy.units as u
+from astropy.nddata import Cutout2D
+import matplotlib.pyplot as plt
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the desired bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1A_1 map and the desired bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1A_2_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create padded cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1A_2_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    
+    # Save the plot as an image file
+    plt.savefig('stacked_cutout_1A_2_z0.5-0.75_M10-11.png', dpi=300)
+    
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+from astropy.wcs import WCS
+import matplotlib.pyplot as plt
+import astropy.units as u
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the desired bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1A_1 map and the desired bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1A_3_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create padded cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1A_3_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    
+    # Save the plot as an image file
+    plt.savefig('stacked_cutout_1A_3_z0.5-0.75_M10-11.png', dpi=300)
+    
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+from astropy.wcs import WCS
+import matplotlib.pyplot as plt
+import astropy.units as u
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the desired bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1A_1 map and the desired bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1A_4_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create padded cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1A_1_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    
+    # Save the plot as an image file
+    plt.savefig('stacked_cutout_1A_4_z0.5-0.75_M10-11.png', dpi=300)
+    
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+from astropy.wcs import WCS
+import matplotlib.pyplot as plt
+import astropy.units as u
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the desired bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1A_1 map and the desired bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1A_5_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create padded cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1A_5_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    
+    # Save the plot as an image file
+    plt.savefig('stacked_cutout_1A_5_z0.5-0.75_M10-11.png', dpi=300)
+    
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+from astropy.wcs import WCS
+import matplotlib.pyplot as plt
+import astropy.units as u
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the desired bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1A_1 map and the desired bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1A_6_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create padded cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1A_6_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    
+    # Save the plot as an image file
+    plt.savefig('stacked_cutout_1A_6_z0.5-0.75_M10-11.png', dpi=300)
+    
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+from astropy.wcs import WCS
+import matplotlib.pyplot as plt
+import astropy.units as u
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the desired bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1A_1 map and the desired bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1B_1_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create padded cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1B_1_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    
+    # Save the plot as an image file
+    plt.savefig('stacked_cutout_1B_1_z0.5-0.75_M10-11.png', dpi=300)
+    
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+from astropy.wcs import WCS
+import matplotlib.pyplot as plt
+import astropy.units as u
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the desired bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1A_1 map and the desired bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1B_2_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create padded cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1B_2_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    
+    # Save the plot as an image file
+    plt.savefig('stacked_cutout_1B_2_z0.5-0.75_M10-11.png', dpi=300)
+    
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+from astropy.wcs import WCS
+import matplotlib.pyplot as plt
+import astropy.units as u
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the desired bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1B_3 map and the desired bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1B_3_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create padded cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1B_3_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    
+    # Save the plot as an image file
+    plt.savefig('stacked_cutout_1B_3_z0.5-0.75_M10-11.png', dpi=300)
+    
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+from astropy.wcs import WCS
+import matplotlib.pyplot as plt
+import astropy.units as u
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the desired bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1A_1 map and the desired bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1B_4_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create padded cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1B_4_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    
+    # Save the plot as an image file
+    plt.savefig('stacked_cutout_1B_4_z0.5-0.75_M10-11.png', dpi=300)
+    
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+
+import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy.nddata import Cutout2D
+from astropy.coordinates import SkyCoord
+from astropy.wcs import WCS
+import matplotlib.pyplot as plt
+import astropy.units as u
+
+# Load the catalog
+catalog = Table.read('joined_full_w_first_detected_centroid.fits')
+
+# Function to check if a source is in the desired bin
+def in_desired_bin(z, mass):
+    return 0.5 < z < 0.75 and 10 < np.log10(mass) < 11
+
+# Filter sources for the 1B_5 map and the desired bin
+filtered_sources = [
+    (row['first_detected_ra_centroid'], row['first_detected_dec_centroid']) 
+    for row in catalog 
+    if in_desired_bin(row['redshift'], row['Mstar']) and row['SPRIMA_1A_1'] > 0
+]
+
+# Open the single map
+with fits.open("pySIDES_PRIMA_1B_5_1deg_1500hr.fits") as hdul:
+    full_image = hdul[0].data
+    header = hdul[0].header
+    wcs = WCS(header)
+
+# Function to convert RA/Dec to pixel coordinates
+def radec_to_pixel(ra, dec, wcs):
+    skycoord = SkyCoord(ra*u.degree, dec*u.degree, frame='icrs')
+    return skycoord.to_pixel(wcs)
+
+# Function to create padded cutout
+def create_padded_cutout(image, position, size):
+    cutout = Cutout2D(image, position, size, mode='partial', fill_value=0)
+    padded_cutout = np.zeros(size)
+    padded_cutout[:cutout.data.shape[0], :cutout.data.shape[1]] = cutout.data
+    return padded_cutout
+
+# Stack cutouts
+stacked_cutout = None
+cutout_size = (30, 30)
+for ra, dec in filtered_sources:
+    try:
+        x, y = radec_to_pixel(ra, dec, wcs)
+        cutout = create_padded_cutout(full_image, (x, y), cutout_size)
+        if stacked_cutout is None:
+            stacked_cutout = cutout
+        else:
+            stacked_cutout += cutout
+    except Exception as e:
+        print(f"Error processing cutout at (RA: {ra}, Dec: {dec}): {e}")
+
+# Normalize
+if stacked_cutout is not None and len(filtered_sources) > 0:
+    stacked_cutout /= len(filtered_sources)
+    
+    # Find the peak pixel value
+    peak_value = np.max(stacked_cutout)
+    peak_position = np.unravel_index(np.argmax(stacked_cutout), stacked_cutout.shape)
+    
+    print(f"Peak pixel value: {peak_value}")
+    print(f"Peak pixel position: {peak_position}")
+    
+    # Save the stacked image
+    fits.writeto('stacked_cutout_1B_5_z0.5-0.75_M10-11.fits', stacked_cutout, overwrite=True)
+
+    # Plot the result
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(stacked_cutout, cmap='gray', origin='lower')
+    plt.colorbar(im, label='Intensity')
+    plt.title(f'Stacked Cutout Image (Peak: {peak_value:.6f})')
+    plt.xlabel('Pixel X')
+    plt.ylabel('Pixel Y')
+    plt.plot(peak_position[1], peak_position[0], 'r+', markersize=20)  # Mark the peak
+    
+    # Save the plot as an image file
+    plt.savefig('stacked_cutout_1B_5_z0.5-0.75_M10-11.png', dpi=300)
+    
+    plt.show()
+else:
+    print("No sources found in the specified bin or error in stacking.")
+
+print(f"Total sources in bin: {len(filtered_sources)}")
+
+
+
